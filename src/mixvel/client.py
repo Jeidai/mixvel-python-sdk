@@ -6,7 +6,7 @@ import uuid
 
 from jinja2 import Environment, FileSystemLoader
 from lxml import etree
-import requests
+import httpx
 
 from mixvel._parsers import (
     is_cancel_success,
@@ -47,6 +47,7 @@ class Client:
         self.token = ""
         self.gateway = gateway
         self.verify_ssl = verify_ssl
+        self._client = httpx.Client(base_url=gateway, verify=verify_ssl)
 
     def __prepare_request(self, template, context):
         """Constructs request.
@@ -76,7 +77,6 @@ class Client:
         :return: content of response `Body` node.
         :rtype: lxml.etree._Element
         """
-        url = "{gateway}{endpoint}".format(gateway=self.gateway, endpoint=endpoint)
         headers = {
             "Content-Type": "application/xml",
         }
@@ -89,10 +89,10 @@ class Client:
             raise ValueError("Unknown endpoint: {}".format(endpoint))
         data = self.__prepare_request(template, context)
         self.sent = data
-        log.info(url)
+        log.info("%s%s", self.gateway, endpoint)
         log.info(self.sent)
         self.recv = None
-        r = requests.post(url, data=data, headers=headers, verify=self.verify_ssl)
+        r = self._client.post(endpoint, content=data, headers=headers)
         self.recv = r.content
         log.info(self.recv)
         r.raise_for_status()
@@ -207,3 +207,13 @@ class Client:
         }
         resp = self.__request("/api/Order/Cancel", context)
         return is_cancel_success(resp)
+
+    def close(self):
+        """Close the underlying HTTP client session."""
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
