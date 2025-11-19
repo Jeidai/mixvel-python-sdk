@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import datetime
 import logging
-import os
 import uuid
+from xml.etree import ElementTree as ET
 
-from jinja2 import Environment, FileSystemLoader
-from lxml import etree
-import requests
+import httpx
 
 from mixvel._parsers import (
     is_cancel_success,
@@ -18,18 +16,25 @@ from mixvel.models import (
     SelectedOffer,
 )
 from mixvel.models import AirShoppingResponse
+from mixvel.xml.base import XmlMessage
+from mixvel.xml.envelope import MessageEnvelope, MessageInfo
+from mixvel.xml.requests import (
+    AirShoppingRequest,
+    AuthRequest,
+    OrderCancelRequest,
+    OrderChangeRequest,
+    OrderCreateRequest,
+    OrderRetrieveRequest,
+)
 
-from .endpoint import is_login_endpoint, request_template
+from .endpoint import is_login_endpoint
 from .exceptions import NoOrdersToCancel
-from .utils import lxml_remove_namespaces
+from .utils import strip_namespaces
 
 PROD_GATEWAY = "https://api.mixvel.com"
 TEST_GATEWAY = "https://api-test.mixvel.com"
 
 log = logging.getLogger(__name__)
-here = os.path.dirname(os.path.abspath(__file__))
-
-
 class Client:
     def __init__(
         self, login, password, structure_unit_id, gateway=PROD_GATEWAY, verify_ssl=True
@@ -47,26 +52,23 @@ class Client:
         self.token = ""
         self.gateway = gateway
         self.verify_ssl = verify_ssl
+        self._client = httpx.Client(base_url=gateway, verify=verify_ssl)
 
-    def __prepare_request(self, template, context):
-        """Constructs request.
+    def __prepare_request(self, payload: XmlMessage) -> str:
+        """Wrap the request payload in a MixVel envelope."""
 
-        :param template: file name of request template
-        :type template: str
-        :param context: values for request template rendering
-        :type context: dict
-        :return: text of rendered request
-        :rtype: str
-        """
-        context["message_id"] = uuid.uuid4()
-        context["time_sent"] = datetime.datetime.utcnow()
-        template_env = Environment(
-            loader=FileSystemLoader(os.path.join(here, "templates"))
+        envelope = MessageEnvelope(
+            message_info=MessageInfo(
+                message_id=str(uuid.uuid4()),
+                time_sent=datetime.datetime.utcnow().replace(
+                    tzinfo=datetime.timezone.utc
+                ),
+            ),
+            payload=payload,
         )
-        request_template = template_env.get_template(template)
-        return request_template.render(context)
+        return envelope.to_xml()
 
-    def __request(self, endpoint, context):
+    def __request(self, endpoint, payload: XmlMessage):
         """Constructs and executes request.
 
         :param endpoint: method endpoint, e.g. "/api/Accounts/login"
@@ -76,7 +78,6 @@ class Client:
         :return: content of response `Body` node.
         :rtype: lxml.etree._Element
         """
-        url = "{gateway}{endpoint}".format(gateway=self.gateway, endpoint=endpoint)
         headers = {
             "Content-Type": "application/xml",
         }
@@ -84,20 +85,17 @@ class Client:
             if not self.token:
                 self.auth()
             headers["Authorization"] = "Bearer {token}".format(token=self.token)
-        template = request_template(endpoint)
-        if template is None:
-            raise ValueError("Unknown endpoint: {}".format(endpoint))
-        data = self.__prepare_request(template, context)
+        data = self.__prepare_request(payload)
         self.sent = data
-        log.info(url)
+        log.info("%s%s", self.gateway, endpoint)
         log.info(self.sent)
         self.recv = None
-        r = requests.post(url, data=data, headers=headers, verify=self.verify_ssl)
+        r = self._client.post(endpoint, content=data, headers=headers)
         self.recv = r.content
         log.info(self.recv)
         r.raise_for_status()
-        resp = etree.fromstring(self.recv)
-        lxml_remove_namespaces(resp)
+        resp = ET.fromstring(self.recv)
+        strip_namespaces(resp)
         err = resp.find(".//Error")
         if err is not None:
             typ = err.find("./ErrorType").text
@@ -122,12 +120,12 @@ class Client:
         :return: auth token
         :rtype: str
         """
-        context = {
-            "login": self.login,
-            "password": self.password,
-            "structure_unit_id": self.structure_unit_id,
-        }
-        resp = self.__request("/api/Accounts/login", context)
+        payload = AuthRequest(
+            login=self.login,
+            password=self.password,
+            structure_unit_id=self.structure_unit_id,
+        )
+        resp = self.__request("/api/Accounts/login", payload)
         token = resp.find("./Token").text
         self.token = token
 
@@ -142,11 +140,8 @@ class Client:
         :type paxes: list[AnonymousPassenger]
         :rtype: AirShoppingResponse
         """
-        context = {
-            "itinerary": itinerary,
-            "paxes": paxes,
-        }
-        resp = self.__request("/api/Order/AirShopping", context)
+        payload = AirShoppingRequest(itinerary=itinerary, paxes=paxes)
+        resp = self.__request("/api/Order/AirShopping", payload)
         return parse_air_shopping_response(resp)
 
     def create_order(self, selected_offer, paxes):
@@ -158,11 +153,8 @@ class Client:
         :type paxes: list[Passenger]
         :rtype: OrderViewResponse
         """
-        context = {
-            "selected_offer": selected_offer,
-            "paxes": paxes,
-        }
-        resp = self.__request("/api/Order/Create", context)
+        payload = OrderCreateRequest(selected_offer=selected_offer, paxes=paxes)
+        resp = self.__request("/api/Order/Create", payload)
         return parse_order_view_response(resp)
 
     def retrieve_order(self, mix_order_id):
@@ -172,10 +164,8 @@ class Client:
         :type mix_order_id: str
         :rtype: OrderViewResponse
         """
-        context = {
-            "mix_order_id": mix_order_id,
-        }
-        resp = self.__request("/api/Order/Retrieve", context)
+        payload = OrderRetrieveRequest(mix_order_id=mix_order_id)
+        resp = self.__request("/api/Order/Retrieve", payload)
 
         return parse_order_view_response(resp)
 
@@ -187,11 +177,8 @@ class Client:
         :param amount: amount
         :type amount: int
         """
-        context = {
-            "mix_order_id": mix_order_id,
-            "amount": amount,
-        }
-        resp = self.__request("/api/Order/Change", context)
+        payload = OrderChangeRequest(mix_order_id=mix_order_id, amount=amount)
+        resp = self.__request("/api/Order/Change", payload)
 
         return parse_order_view_response(resp)
 
@@ -202,8 +189,16 @@ class Client:
         :type mix_order_id: str
         :rtype: bool
         """
-        context = {
-            "mix_order_id": mix_order_id,
-        }
-        resp = self.__request("/api/Order/Cancel", context)
+        payload = OrderCancelRequest(mix_order_id=mix_order_id)
+        resp = self.__request("/api/Order/Cancel", payload)
         return is_cancel_success(resp)
+
+    def close(self):
+        """Close the underlying HTTP client session."""
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()

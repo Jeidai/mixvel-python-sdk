@@ -1,29 +1,25 @@
 # -*- coding: utf-8 -*-
 
-"""
-mixvel.utils
-~~~~~~~~~~~~~~
-This module provides utility functions that are used within mixvel
-that are also useful for external consumption.
-"""
+"""General utility helpers used across the SDK."""
 
-from lxml import objectify
-from lxml import etree
+from __future__ import annotations
+
+from xml.etree import ElementTree as ET
 
 
-def lxml_remove_namespaces(root):
-    """Remove all namespaces and prefixes from lxml object.
+def strip_namespaces(root: ET.Element) -> ET.Element:
+    """Remove XML namespaces in-place so XPath-like queries stay simple."""
 
-    Links:
-    * https://stackoverflow.com/a/18160164/7309986
-
-    :param root: XML object
-    :type root: lxml.etree._Element
-    """
-    for elem in root.getiterator():
-        if not hasattr(elem.tag, 'find'):
+    for elem in root.iter():
+        if not isinstance(elem.tag, str):
             continue
-        i = elem.tag.find('}')
-        if i >= 0:
-            elem.tag = elem.tag[i + 1:]
-    objectify.deannotate(root, cleanup_namespaces=True)
+        if "}" in elem.tag:
+            elem.tag = elem.tag.split("}", 1)[1]
+    return root
+
+
+# Backwards compatibility for third-party code that relied on the old helper.
+def lxml_remove_namespaces(root: ET.Element) -> ET.Element:
+    """Deprecated alias that now calls :func:`strip_namespaces`."""
+
+    return strip_namespaces(root)

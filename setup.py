@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from setuptools import setup
+from setuptools import find_packages, setup
 import os
 import sys
 
@@ -8,16 +8,16 @@ if sys.version_info[0] < 3:
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-packages = ["mixvel"]
+packages = find_packages(where="src")
 
 requires = [
-    "jinja2==2.10",
-    "lxml==3.7.2",
-    "requests==2.25.1",
+    "httpx>=0.27",
+    "pydantic>=2.8",
+    "pydantic-xml>=2.7",
 ]
 
 test_requirements = [
-    "pytest==4.6.11",
+    "pytest>=8.2",
 ]
 
 about = {}
@@ -37,18 +37,24 @@ setup(
     author_email=about["__author_email__"],
     url=about["__url__"],
     packages=packages,
-    package_dir={"mixvel": "src/mixvel"},
+    package_dir={"": "src"},
     include_package_data=True,
     install_requires=requires,
+    python_requires=">=3.8",
     zip_safe=False,
     classifiers=[
-        "Development Status :: 1 - Planning",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Natural Language :: English",
         "Topic :: Software Development :: Libraries",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     extras_require={
         "test": test_requirements,

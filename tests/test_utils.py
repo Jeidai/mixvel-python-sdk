@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from .utils import parse_xml
-from mixvel.utils import lxml_remove_namespaces
+from mixvel.utils import strip_namespaces
 
 import pytest
 
@@ -12,5 +12,5 @@ class TestUtils:
     def test_lxml_remove_namespaces(self, resp_path):
         resp = parse_xml(resp_path)
         assert resp.find(".//AuthResponse") is None
-        lxml_remove_namespaces(resp)
+        strip_namespaces(resp)
         assert resp.find(".//AuthResponse") is not None
