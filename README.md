@@ -28,6 +28,10 @@ Every outbound API call now goes through `mixvel.xml.requests.*` to build the Mi
 classes wrap the Pydantic domain models and emit the correct namespaces, message headers, and body
 structure required by the gateway.  If you need to extend a request, you can subclass the relevant
 `XmlMessage` and feed it to `Client.__request()` without touching any string templates.
+All request and response payloads are represented as Python data classes located under
+`mixvel.models`, so you do not have to handcraft XML. The client automatically renders the XML
+templates, submits them to the configured gateway, and parses the structured response back into the
+model classes.
 
 ## Installation
 

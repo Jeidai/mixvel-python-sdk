@@ -14,7 +14,7 @@ requires = [
     "httpx>=0.27",
     "pydantic>=2.8",
     "pydantic-xml>=2.7",
-]
+
 
 test_requirements = [
     "pytest>=8.2",
