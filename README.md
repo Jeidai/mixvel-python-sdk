@@ -17,6 +17,17 @@ build a complete NDC workflow in Python:
 - **Retrieve, change, or cancel** previously created orders using `Client.retrieve_order()`,
   `Client.change_order()` (ticket issuance), and `Client.cancel_order()`.
 
+All request and response payloads are powered by [Pydantic v2](https://docs.pydantic.dev/) models
+exposed via `mixvel.models`.  The new `mixvel.xml` module turns those models into fully-formed XML
+messages (and back again) using a lightweight `pydantic-xml`-style envelope/builder, so you no
+longer have to juggle Jinja templates or `lxml` in your own code.
+
+### Typed XML messages
+
+Every outbound API call now goes through `mixvel.xml.requests.*` to build the MixVel payload.  These
+classes wrap the Pydantic domain models and emit the correct namespaces, message headers, and body
+structure required by the gateway.  If you need to extend a request, you can subclass the relevant
+`XmlMessage` and feed it to `Client.__request()` without touching any string templates.
 All request and response payloads are represented as Python data classes located under
 `mixvel.models`, so you do not have to handcraft XML. The client automatically renders the XML
 templates, submits them to the configured gateway, and parses the structured response back into the

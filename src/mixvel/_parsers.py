@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+from xml.etree import ElementTree as ET
 
 from .models import (
     Amount,
@@ -44,7 +45,10 @@ def is_cancel_success(resp):
     :type resp: lxml.etree._Element
     :rtype: bool
     """
-    return all([s == "Success" for s in resp.xpath(".//OperationStatus/text()")])
+    return all(
+        (node.text or "") == "Success"
+        for node in resp.findall(".//OperationStatus")
+    )
 
 
 def parse_air_shopping_response(resp):
@@ -57,7 +61,7 @@ def parse_air_shopping_response(resp):
     offer_elements = resp.findall("./Response/Offer")
     if not offer_elements:
         return AirShoppingResponse(offers=[], data_lists=DataLists())
-    offers = map(lambda offer: parse_offer(offer), offer_elements)
+    offers = [parse_offer(offer) for offer in offer_elements]
     data_lists = parse_data_lists(resp.find("./Response/DataLists"))
     return AirShoppingResponse(offers, data_lists)
 
@@ -73,7 +77,7 @@ def parse_order_view_response(resp):
     data_lists = parse_data_lists(resp.find("./Response/DataLists"))
     ticket_doc_info_nodes = resp.findall("./Response/TicketDocInfo")
     ticket_doc_info = (
-        map(lambda doc: parse_ticket_doc_info(doc), ticket_doc_info_nodes)
+        [parse_ticket_doc_info(doc) for doc in ticket_doc_info_nodes]
         if ticket_doc_info_nodes
         else None
     )
@@ -140,9 +144,11 @@ def parse_coupon(elm):
         if elm.find("./FareBasisCode") is not None
         else None
     )
-    pax_segment_ref_ids = map(
-        lambda ref_id: ref_id.text, elm.findall("./SoldAirlineInfo/PaxSegmentRefID")
-    )
+    pax_segment_ref_ids = [
+        ref_id.text
+        for ref_id in elm.findall("./SoldAirlineInfo/PaxSegmentRefID")
+        if ref_id.text
+    ]
     return Coupon(
         coupon_number,
         fare_basis_code=fare_basis_code,
@@ -157,19 +163,22 @@ def parse_data_lists(elm):
     :type elm: lxml.etree._Element
     :rtype: DataLists
     """
-    origin_dest_list = map(
-        lambda elm: parse_origin_dest(elm), elm.findall("./OriginDestList/OriginDest")
-    )
-    pax_journey_list = map(
-        lambda elm: parse_pax_journey(elm), elm.findall("./PaxJourneyList/PaxJourney")
-    )
-    pax_segment_list = map(
-        lambda elm: parse_pax_segment(elm), elm.findall("./PaxSegmentList/PaxSegment")
-    )
-    validating_party_list = map(
-        lambda validating_party: parse_validating_party(validating_party),
-        elm.findall("./ValidatingPartyList/ValidatingParty"),
-    )
+    origin_dest_list = [
+        parse_origin_dest(node)
+        for node in elm.findall("./OriginDestList/OriginDest")
+    ]
+    pax_journey_list = [
+        parse_pax_journey(node)
+        for node in elm.findall("./PaxJourneyList/PaxJourney")
+    ]
+    pax_segment_list = [
+        parse_pax_segment(node)
+        for node in elm.findall("./PaxSegmentList/PaxSegment")
+    ]
+    validating_party_list = [
+        parse_validating_party(node)
+        for node in elm.findall("./ValidatingPartyList/ValidatingParty")
+    ]
 
     return DataLists(
         origin_dest_list=origin_dest_list,
@@ -214,9 +223,10 @@ def parse_fare_detail(elm):
     :type elm: lxml.etree._Element
     :rtype: FareDetail
     """
-    fare_components = map(
-        lambda fc: parse_fare_component(fc), elm.findall("./FareComponent")
-    )
+    fare_components = [
+        parse_fare_component(fc)
+        for fc in elm.findall("./FareComponent")
+    ]
     pax_ref_id = elm.find("./PaxRefID").text
 
     return FareDetail(fare_components, pax_ref_id)
@@ -246,9 +256,10 @@ def parse_offer(elm):
     :rtype: OfferItem
     """
     offer_id = elm.find("./OfferID").text
-    offer_items = map(
-        lambda offer_item: parse_offer_item(offer_item), elm.findall("./OfferItem")
-    )
+    offer_items = [
+        parse_offer_item(offer_item)
+        for offer_item in elm.findall("./OfferItem")
+    ]
     owner_code = elm.find("./OwnerCode").text
     timelimit = elm.find("./OfferExpirationTimeLimitDateTime").text
     timelimit = timelimit.split(".")[0].rstrip("Z")
@@ -283,10 +294,11 @@ def parse_offer_item(elm):
     """
     offer_item_id = elm.find("./OfferItemID").text
     price = parse_price(elm.find("./Price"))
-    services = map(lambda service: parse_service(service), elm.findall("./Service"))
-    fare_details = map(
-        lambda fare_detail: parse_fare_detail(fare_detail), elm.findall("./FareDetail")
-    )
+    services = [parse_service(service) for service in elm.findall("./Service")]
+    fare_details = [
+        parse_fare_detail(fare_detail)
+        for fare_detail in elm.findall("./FareDetail")
+    ]
 
     return OfferItem(offer_item_id, price, services, fare_details=fare_details)
 
@@ -299,8 +311,8 @@ def parse_order(elm):
     :rtype: Order
     """
     order_id = elm.find("./OrderID").text
-    order_items = map(lambda node: parse_order_item(node), elm.findall("./OrderItem"))
-    booking_refs = map(lambda node: parse_booking(node), elm.findall("./BookingRef"))
+    order_items = [parse_order_item(node) for node in elm.findall("./OrderItem")]
+    booking_refs = [parse_booking(node) for node in elm.findall("./BookingRef")]
     total_price = parse_price(elm.find("./TotalPrice"))
 
     return Order(order_id, booking_refs, order_items, total_price)
@@ -336,9 +348,9 @@ def parse_origin_dest(elm):
         if elm.find("./OriginDestID") is not None
         else None
     )
-    pax_journey_ref_ids = map(
-        lambda ref_id: ref_id.text, elm.findall("./PaxJourneyRefID")
-    )
+    pax_journey_ref_ids = [
+        ref_id.text for ref_id in elm.findall("./PaxJourneyRefID") if ref_id.text
+    ]
 
     return OriginDest(
         origin_code,
@@ -356,9 +368,9 @@ def parse_pax_journey(elm):
     :rtype: PaxJourney
     """
     pax_journey_id = elm.find("./PaxJourneyID").text
-    pax_segment_ref_ids = map(
-        lambda ref_id: ref_id.text, elm.findall("./PaxSegmentRefID")
-    )
+    pax_segment_ref_ids = [
+        ref_id.text for ref_id in elm.findall("./PaxSegmentRefID") if ref_id.text
+    ]
 
     return PaxJourney(pax_journey_id, pax_segment_ref_ids)
 
@@ -427,7 +439,7 @@ def parse_service(elm):
     :rtype: Service
     """
     service_id = elm.find("./ServiceID").text
-    pax_ref_ids = map(lambda ref_id: ref_id.text, elm.findall("./PaxRefID"))
+    pax_ref_ids = [ref_id.text for ref_id in elm.findall("./PaxRefID") if ref_id.text]
     service_associations = parse_service_offer_associations(
         elm.find("./ServiceAssociations")
     )
@@ -454,12 +466,16 @@ def parse_service_offer_associations(elm):
     :type elm: lxml.etree._Element
     :rtype: ServiceOfferAssociations
     """
-    pax_journey_ref_ids = map(
-        lambda ref_id: ref_id.text, elm.findall("./PaxJourneyRef/PaxJourneyRefID")
-    )
-    pax_segment_ref_ids = map(
-        lambda ref_id: ref_id.text, elm.findall("./PaxSegmentRef/PaxSegmentRefID")
-    )
+    pax_journey_ref_ids = [
+        ref_id.text
+        for ref_id in elm.findall("./PaxJourneyRef/PaxJourneyRefID")
+        if ref_id.text
+    ]
+    pax_segment_ref_ids = [
+        ref_id.text
+        for ref_id in elm.findall("./PaxSegmentRef/PaxSegmentRefID")
+        if ref_id.text
+    ]
 
     return ServiceOfferAssociations(
         pax_journey_ref_ids=pax_journey_ref_ids,
@@ -484,7 +500,7 @@ def parse_tax_summary(elm):
     :type elm: lxml.etree._Element
     :rtype: TaxSummary
     """
-    taxes = map(lambda tax: parse_tax(tax), elm.findall("./Tax"))
+    taxes = [parse_tax(tax) for tax in elm.findall("./Tax")]
     total_tax_amount = (
         parse_amount(elm.find("./TotalTaxAmount"))
         if elm.find("./TotalTaxAmount") is not None
@@ -495,14 +511,14 @@ def parse_tax_summary(elm):
 
 
 def parse_ticket(elm):
-    coupons = map(lambda coupon: parse_coupon(coupon), elm.findall("./Coupon"))
+    coupons = [parse_coupon(coupon) for coupon in elm.findall("./Coupon")]
     ticket_number = elm.find("./TicketNumber").text
     return Ticket(coupons, ticket_number)
 
 
 def parse_ticket_doc_info(elm):
     pax_ref_id = elm.find("./PaxRefID").text
-    tickets = map(lambda ticket: parse_ticket(ticket), elm.findall("./Ticket"))
+    tickets = [parse_ticket(ticket) for ticket in elm.findall("./Ticket")]
     return TicketDocInfo(pax_ref_id, tickets)
 
 

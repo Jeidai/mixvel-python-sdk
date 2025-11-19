@@ -11,10 +11,10 @@ here = os.path.abspath(os.path.dirname(__file__))
 packages = find_packages(where="src")
 
 requires = [
-    "Jinja2>=3.1",
-    "lxml>=4.9",
     "httpx>=0.27",
-]
+    "pydantic>=2.8",
+    "pydantic-xml>=2.7",
+
 
 test_requirements = [
     "pytest>=8.2",

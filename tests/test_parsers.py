@@ -129,7 +129,7 @@ class TestTypeParsers:
         ],
     )
     def test_parse_amount(self, model_path, want):
-        elm = parse_xml(model_path).getroot()
+        elm = parse_xml(model_path)
         got = parse_amount(elm)
         assert got.amount == want.amount
         assert got.cur_code == want.cur_code
@@ -144,7 +144,7 @@ class TestTypeParsers:
         ],
     )
     def test_parse_booking(self, model_path, want):
-        elm = parse_xml(model_path).getroot()
+        elm = parse_xml(model_path)
         got = parse_booking(elm)
         assert got.booking_id == want.booking_id
         assert got.booking_ref_type_code == want.booking_ref_type_code
@@ -163,7 +163,7 @@ class TestTypeParsers:
         ],
     )
     def test_parse_data_lists(self, model_path, want):
-        elm = parse_xml(model_path).getroot()
+        elm = parse_xml(model_path)
         got = parse_data_lists(elm)
         assert isinstance(got.origin_dest_list[0], OriginDest)
         assert isinstance(got.pax_journey_list[0], PaxJourney)
@@ -183,7 +183,7 @@ class TestTypeParsers:
         ],
     )
     def test_parse_dated_marketing_segment(self, model_path, want):
-        elm = parse_xml(model_path).getroot()
+        elm = parse_xml(model_path)
         got = parse_dated_marketing_segment(elm)
         got.carrier_desig_code == want.carrier_desig_code
         got.marketing_carrier_flight_number_text == want.marketing_carrier_flight_number_text
@@ -235,7 +235,7 @@ class TestTypeParsers:
         ],
     )
     def test_parse_mix_order(self, model_path, want):
-        elm = parse_xml(model_path).getroot()
+        elm = parse_xml(model_path)
         got = parse_mix_order(elm)
         assert got.mix_order_id == want.mix_order_id
         assert isinstance(got.orders[0], Order)
